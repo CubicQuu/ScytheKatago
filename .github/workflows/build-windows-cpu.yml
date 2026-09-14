@@ -145,7 +145,15 @@ jobs:
       - name: Download smoke-test network
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b10c128-s1141046784-d204142634.bin.gz" -OutFile "smoke-model.bin.gz"
+          $networkName = "kata1-b10c128-s1141046784-d204142634"
+          $page = Invoke-WebRequest -Uri "https://katagotraining.org/networks/"
+          $pattern = 'href="([^"]*' + [regex]::Escape($networkName) + '[^"]*\.bin\.gz[^"]*)"'
+          $match = [regex]::Match($page.Content, $pattern)
+          if (-not $match.Success) { throw "Could not find network download URL" }
+          $url = [System.Net.WebUtility]::HtmlDecode($match.Groups[1].Value)
+          if ($url.StartsWith("/")) { $url = "https://katagotraining.org$url" }
+          Write-Host "Downloading $networkName from $url"
+          Invoke-WebRequest -Uri $url -Headers @{ Referer = "https://katagotraining.org/networks/" } -OutFile "smoke-model.bin.gz"
 
       - name: Smoke-test live GTP analysis
         shell: pwsh
