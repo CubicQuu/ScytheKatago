@@ -97,7 +97,7 @@ jobs:
         run: |
           cmake -S katago/cpp -B katago/cpp/build -A x64 `
             -DUSE_BACKEND=EIGEN `
-            -DEIGEN3_INCLUDE_DIRS="$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/include" `
+            -DEIGEN3_INCLUDE_DIRS="$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/include/eigen3" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Compile KataGo
