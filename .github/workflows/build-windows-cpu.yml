@@ -124,7 +124,12 @@ jobs:
       - name: Download smoke-test network
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://media.katagotraining.org/uploaded/networks/models/kata1/g170e-b10c128-s1141046784-d204142634.bin.gz" -OutFile "smoke-model.bin.gz"
+          Invoke-WebRequest -Uri "https://github.com/sanderland/katrain/releases/download/v1.14.0/KaTrain.zip" -OutFile "katrain.zip"
+          Expand-Archive -Path "katrain.zip" -DestinationPath "katrain-model"
+          $network = Get-ChildItem "katrain-model" -Recurse -Filter "*.bin.gz" | Select-Object -First 1
+          if (-not $network) { throw "KaTrain package did not contain a KataGo network" }
+          Copy-Item $network.FullName "smoke-model.bin.gz"
+          Write-Host "Using network $($network.Name)"
 
       - name: Install C++ dependencies
         shell: pwsh
