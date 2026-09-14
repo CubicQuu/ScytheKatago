@@ -142,6 +142,68 @@ jobs:
         shell: pwsh
         run: katago/cpp/build/Release/katago.exe version
 
+      - name: Download smoke-test network
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b10c128-s1141046784-d204142634.bin.gz" -OutFile "smoke-model.bin.gz"
+
+      - name: Smoke-test live GTP analysis
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "katago/cpp/build/Release/katago.exe").Path
+          $model = (Resolve-Path "smoke-model.bin.gz").Path
+          $config = (Resolve-Path "katago/cpp/configs/gtp_example.cfg").Path
+
+          $psi = [System.Diagnostics.ProcessStartInfo]::new()
+          $psi.FileName = $exe
+          $psi.Arguments = "gtp -model `"$model`" -config `"$config`""
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardInput = $true
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.CreateNoWindow = $true
+
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $psi
+          if (-not $process.Start()) { throw "Failed to start KataGo" }
+          $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+          $stderrTask = $process.StandardError.ReadToEndAsync()
+
+          $process.StandardInput.WriteLine("name")
+          $process.StandardInput.WriteLine("boardsize 11")
+          $process.StandardInput.WriteLine("clear_board")
+          $process.StandardInput.WriteLine("komi 7.5")
+          $process.StandardInput.WriteLine("lz-analyze 10")
+          $process.StandardInput.Flush()
+          Start-Sleep -Seconds 8
+
+          if ($process.HasExited) {
+            $stdout = $stdoutTask.GetAwaiter().GetResult()
+            $stderr = $stderrTask.GetAwaiter().GetResult()
+            Write-Host "--- stdout ---"
+            Write-Host $stdout
+            Write-Host "--- stderr ---"
+            Write-Host $stderr
+            throw "KataGo exited during lz-analyze with code $($process.ExitCode)"
+          }
+
+          $process.StandardInput.WriteLine("stop")
+          $process.StandardInput.WriteLine("quit")
+          $process.StandardInput.Close()
+          if (-not $process.WaitForExit(30000)) {
+            $process.Kill()
+            throw "KataGo did not exit after quit"
+          }
+
+          $stdout = $stdoutTask.GetAwaiter().GetResult()
+          $stderr = $stderrTask.GetAwaiter().GetResult()
+          Write-Host "--- stdout ---"
+          Write-Host $stdout
+          Write-Host "--- stderr ---"
+          Write-Host $stderr
+          if ($process.ExitCode -ne 0) { throw "KataGo exited with code $($process.ExitCode)" }
+          if ($stdout -notmatch "info move") { throw "No live analysis output was produced" }
+
       - name: Set up Java 8
         uses: actions/setup-java@v4
         with:
