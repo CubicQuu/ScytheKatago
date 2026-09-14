@@ -227,28 +227,43 @@ jobs:
           New-Item -ItemType Directory -Force dist/engine | Out-Null
           New-Item -ItemType Directory -Force dist/gui | Out-Null
           Copy-Item katago/cpp/build/Release/katago.exe dist/engine/katago.exe
-          $zlibDll = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/zlib1.dll"
-          if (Test-Path $zlibDll) { Copy-Item $zlibDll dist/engine/zlib1.dll }
+          Get-ChildItem katago/cpp/build/Release -Filter "*.dll" | Copy-Item -Destination dist/engine
+          Copy-Item smoke-model.bin.gz dist/engine/model.bin.gz
           if (Test-Path katago/cpp/configs) { Copy-Item -Recurse katago/cpp/configs dist/engine/configs }
           $jar = Get-ChildItem lizzieyzy/target -Filter "*shaded.jar" | Select-Object -First 1
           if (-not $jar) { throw "LizzieYzy shaded JAR was not produced" }
           Copy-Item $jar.FullName dist/gui/lizzie-yzy2.5.3-shaded.jar
           @"
-          ScytheKataGo Windows CPU build
+          @echo off
+          cd /d "%~dp0gui"
+          java -jar lizzie-yzy2.5.3-shaded.jar
+          if errorlevel 1 pause
+          "@ | Set-Content -Encoding ASCII dist/Start-ScytheKataGo.bat
+          @"
+          ScytheKataGo Windows CPU ready-to-run build
 
-          Contents:
-          - engine/katago.exe: Scythe-modified KataGo engine
-          - gui/lizzie-yzy2.5.3-shaded.jar: Scythe-modified LizzieYzy GUI
-          - engine/configs/: sample KataGo configurations
+          已包含並通過 11x11 lz-analyze 實際測試：
+          - engine/katago.exe
+          - engine/model.bin.gz
+          - engine/configs/gtp_example.cfg
+          - gui/lizzie-yzy2.5.3-shaded.jar
+          - Start-ScytheKataGo.bat
 
-          A compatible KataGo neural-network model (.bin.gz) is still required.
-          This build is unsigned and was compiled automatically from the public source.
+          LizzieYzy 引擎命令：
+          "%~dp0engine\katago.exe" gtp -model "%~dp0engine\model.bin.gz" -config "%~dp0engine\configs\gtp_example.cfg"
+
+          模型來源：
+          KaTrain v1.14.0 所附 kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
+          https://github.com/sanderland/katrain/releases/tag/v1.14.0
+          官方神經網路授權：https://katagotraining.org/
+
+          注意：本程式未簽章，僅由公開原始碼自動編譯。
           "@ | Set-Content -Encoding UTF8 dist/README.txt
 
       - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: ScytheKataGo-Windows-CPU
+          name: ScytheKataGo-Windows-CPU-Ready
           path: dist
           if-no-files-found: error
           retention-days: 14
