@@ -87,6 +87,40 @@ jobs:
           "@
           $cpp.Replace($cppNeedle, $cppInsert.TrimEnd()) | Set-Content -NoNewline -Encoding UTF8 $cppPath
 
+          # Restore the omitted LizzieFrame integration so the panel is visible and usable.
+          $framePath = "lizzieyzy/src/main/java/featurecat/lizzie/gui/LizzieFrame.java"
+          $frame = Get-Content -Raw $framePath
+
+          $fieldNeedle = "  public static BottomToolbar toolbar;"
+          if (-not $frame.Contains($fieldNeedle)) { throw "LizzieFrame field insertion point not found" }
+          $frame = $frame.Replace(
+            $fieldNeedle,
+            "$fieldNeedle`r`n  public static ScythePanel scythePanel;"
+          )
+
+          $ctorNeedle = "    topPanel = new JToolBar();"
+          if (-not $frame.Contains($ctorNeedle)) { throw "LizzieFrame constructor insertion point not found" }
+          $frame = $frame.Replace(
+            $ctorNeedle,
+            "$ctorNeedle`r`n    scythePanel = new ScythePanel();"
+          )
+
+          $baseNeedle = "    basePanel.setLayout(null);"
+          if (-not $frame.Contains($baseNeedle)) { throw "LizzieFrame base panel insertion point not found" }
+          $frame = $frame.Replace(
+            $baseNeedle,
+            "$baseNeedle`r`n    scythePanel.setBounds(Math.max(0, getWidth() - 220), 0, 200, 40);`r`n    basePanel.add(scythePanel, new Integer(11));"
+          )
+
+          $resizeNeedle = "            int width = getWidth() - getInsets().left - getInsets().right;"
+          if (-not $frame.Contains($resizeNeedle)) { throw "LizzieFrame resize insertion point not found" }
+          $frame = $frame.Replace(
+            $resizeNeedle,
+            "$resizeNeedle`r`n            scythePanel.setBounds(Math.max(0, width - 220), 0, 200, 40);"
+          )
+
+          $frame | Set-Content -NoNewline -Encoding UTF8 $framePath
+
       - name: Install C++ dependencies
         shell: pwsh
         run: |
