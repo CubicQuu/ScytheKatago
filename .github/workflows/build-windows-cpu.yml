@@ -20,11 +20,11 @@ jobs:
         with:
           path: patches
 
-      - name: Checkout KataGo v1.16.4
+      - name: Checkout matching KataGo source
         uses: actions/checkout@v4
         with:
           repository: lightvector/KataGo
-          ref: v1.16.4
+          ref: 4f78e16742c25ff7c78156a1aef9f1d00df6d5b0
           path: katago
 
       - name: Checkout LizzieYzy
@@ -46,6 +46,47 @@ jobs:
           Copy-Item -Force patches/lizzieyzy-main/src/main/java/featurecat/lizzie/rules/Board.java lizzieyzy/src/main/java/featurecat/lizzie/rules/Board.java
           Copy-Item -Force patches/lizzieyzy-main/src/main/java/featurecat/lizzie/rules/BoardHistoryNode.java lizzieyzy/src/main/java/featurecat/lizzie/rules/BoardHistoryNode.java
 
+          # The patch-only repository omitted these AsyncBot declarations and wrappers.
+          $hPath = "katago/cpp/search/asyncbot.h"
+          $h = Get-Content -Raw $hPath
+          $hNeedle = "  void setPosition(Player pla, const Board& board, const BoardHistory& history);"
+          if (-not $h.Contains($hNeedle)) { throw "AsyncBot header insertion point not found" }
+          $hInsert = @"
+          $hNeedle
+            void setManualScytheTrigger(bool trigger);
+            void setScytheCount(Player pla, int count);
+            void setScytheState(int blackCount, int whiteCount, int combo, bool manualTrigger);
+          "@
+          $h.Replace($hNeedle, $hInsert.TrimEnd()) | Set-Content -NoNewline -Encoding UTF8 $hPath
+
+          $cppPath = "katago/cpp/search/asyncbot.cpp"
+          $cpp = Get-Content -Raw $cppPath
+          $cppNeedle = "void AsyncBot::setPosition(Player pla, const Board& board, const BoardHistory& history) {"
+          if (-not $cpp.Contains($cppNeedle)) { throw "AsyncBot source insertion point not found" }
+          $cppInsert = @"
+          void AsyncBot::setManualScytheTrigger(bool trigger) {
+            stopAndWait();
+            search->rootHistory.manualScytheTrigger = trigger;
+          }
+          void AsyncBot::setScytheCount(Player pla, int count) {
+            stopAndWait();
+            if(pla == P_BLACK)
+              search->rootHistory.blackScythes = count;
+            else if(pla == P_WHITE)
+              search->rootHistory.whiteScythes = count;
+          }
+          void AsyncBot::setScytheState(int blackCount, int whiteCount, int combo, bool manualTrigger) {
+            stopAndWait();
+            search->rootHistory.blackScythes = blackCount;
+            search->rootHistory.whiteScythes = whiteCount;
+            search->rootHistory.scytheCombo = combo;
+            search->rootHistory.manualScytheTrigger = manualTrigger;
+          }
+
+          $cppNeedle
+          "@
+          $cpp.Replace($cppNeedle, $cppInsert.TrimEnd()) | Set-Content -NoNewline -Encoding UTF8 $cppPath
+
       - name: Install C++ dependencies
         shell: pwsh
         run: |
@@ -56,6 +97,7 @@ jobs:
         run: |
           cmake -S katago/cpp -B katago/cpp/build -A x64 `
             -DUSE_BACKEND=EIGEN `
+            -DEIGEN3_INCLUDE_DIRS="$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/include" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Compile KataGo
